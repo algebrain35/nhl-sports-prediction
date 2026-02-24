@@ -1,0 +1,13 @@
+docs/tmp.md
+tmp
+tmp.py
+*.profraw
+capstone/*
+.env
+cap/*
+nhl.db
+data/NHL/teams/*
+cap/*
+all_games_preproc.csv
+
+.vercel

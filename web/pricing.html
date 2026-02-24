@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing - Project Radon</title>
+  <link rel="stylesheet" href="styles/common.css">
+  <link rel="stylesheet" href="styles/pricing.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-left">
+      <div class="account-icon" id="accountIcon"></div>
+      <span>Project Radon</span>
+    </div>
+    <div class="nav-right">
+      <a href="index.html">Home</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="predictions.html">Predictions</a>
+      <a href="about.html">About</a>
+      <a href="history.html">History</a>
+    </div>
+  </nav>
+
+    <!-- Account Dropdown -->
+    <div class="dropdown-menu" id="accountDropdown">
+      <div id="userDisplay">Account</div>
+
+      <!-- Subscription status (hidden until logged in) -->
+      <div id="subscriptionStatus" style="display: none;"></div>
+
+      <!-- Login Form -->
+      <div id="authForms">
+          <input type="email" id="loginEmail" placeholder="Email">
+          <input type="password" id="loginPassword" placeholder="Password">
+          <button id="loginButton">Login</button>
+          <button id="showRegister">Register</button>
+      </div>
+
+      <!-- Registration Form -->
+      <div id="registerForm" style="display: none;">
+          <input type="text" id="registerFirstName" placeholder="First Name">
+          <input type="text" id="registerLastName" placeholder="Last Name">
+          <input type="email" id="registerEmail" placeholder="Email">
+          <input type="password" id="registerPassword" placeholder="Password">
+          <button id="registerButton">Register</button>
+          <button id="showLogin">Back to Login</button>
+      </div>
+
+      <!-- Logout Button (hidden until logged in) -->
+      <button id="logoutButton" style="display: none;">Logout</button>
+  </div>
+
+  <div class="pricing-container">
+    <div class="pricing-box">
+      <h2>Premium Subscription</h2>
+      <p class="features">
+        Enjoy real-time predictions, detailed game analytics, and exclusive insights:<br>
+        - Access to predictions page (real-time NHL predictions)<br>
+        - Detailed game analytics<br>
+        - Personalized betting recommendations<br>
+        - 24/7 customer support
+      </p>
+      <p class="price">$9.99/month</p>
+      <button class="subscribe-button" id = "subscribeButton">Subscribe Now</button>
+
+      <div id="payment-element-container" style="display: none; margin-top: 20px;">
+        <div id="payment-element" style="margin-bottom: 16px;"></div>
+        <button id="confirmPaymentButton" class="subscribe-button" type="button">Confirm Payment</button>
+      </div>
+    </div>
+  </div>
+
+<!-- Success Modal -->
+<div id="successModal" class="modal">
+  <div class="modal-content">
+    <h2>🎉 Subscription Successful!</h2>
+    <p>Redirecting to predictions...</p>
+  </div>
+</div>
+
+<!-- Loader -->
+<div id="loader" class="loader-container">
+  <div class="loader"></div>
+</div>
+
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="scripts/stripe.js"></script>
+  <script src="scripts/account.js"></script>
+</body>
+</html>

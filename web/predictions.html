@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictions - Project Radon</title>
+    <link rel="stylesheet" href="styles/common.css">
+    <link rel="stylesheet" href="styles/predictions.css">
+</head>
+<body>
+
+    <!-- nav bar -->
+    <nav>
+        <div class="nav-left">
+            <div class="account-icon" id="accountIcon"></div>
+            <span>Project Radon</span>
+        </div>
+
+        <div class="nav-right">
+            <a href="index.html">Home</a>
+            <a href="pricing.html">Pricing</a>
+            <a href="predictions.html">Predictions</a>
+            <a href="about.html">About</a>
+            <a href="history.html">History</a>
+        </div>
+    </nav>
+
+    <!-- Account Dropdown -->
+    <div class="dropdown-menu" id="accountDropdown">
+        <div id="userDisplay">Account</div>
+
+        <!-- Subscription status (hidden until logged in) -->
+        <div id="subscriptionStatus" style="display: none;"></div>
+
+        <!-- Login Form -->
+        <div id="authForms">
+            <input type="email" id="loginEmail" placeholder="Email">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button id="loginButton">Login</button>
+            <button id="showRegister">Register</button>
+        </div>
+
+        <!-- Registration Form -->
+        <div id="registerForm" style="display: none;">
+            <input type="text" id="registerFirstName" placeholder="First Name">
+            <input type="text" id="registerLastName" placeholder="Last Name">
+            <input type="email" id="registerEmail" placeholder="Email">
+            <input type="password" id="registerPassword" placeholder="Password">
+            <button id="registerButton">Register</button>
+            <button id="showLogin">Back to Login</button>
+        </div>
+
+        <!-- Logout Button (hidden until logged in) -->
+        <button id="logoutButton" style="display: none;">Logout</button>
+    </div>
+    
+    <div class="prediction-wrapper">
+        <h1>NHL Predictions</h1>
+
+        <!-- team selection -->
+        <div class="team-selection">
+            <select id="home-team">
+                <option value="">Select Home Team</option>
+            </select>
+
+            <span class="vs-text">VS</span>
+
+            <select id="away-team">
+                <option value="">Select Away Team</option>
+            </select>
+        </div>
+
+        <!-- prediction buttons -->
+        <div class="prediction-buttons">
+            <button id="get-prediction">Predict ML</button>
+            <button id="get-spread-prediction">Predict Spread</button>
+            <button id="get-ou-prediction">Predict OU</button>
+        </div>
+
+        <!-- over under input -->
+        <div class="ou-container">
+            <label for="ou-value">Over/Under:</label>
+            <input type="number" id="ou-value" placeholder="OU VA" step="0.1" min="0">
+        </div>
+
+        <!-- spread input -->
+        <div class="spread-container"> 
+            <label for="spread-value">Spread:</label>
+            <input type="number" id="spread-value" placeholder="Spread VA" step="0.1" min="0">
+        </div>
+
+        <!-- results display -->
+        <div class="prediction-results">
+            <div id="ml-result" class="result-box">ML RESULTS</div>
+            <div id="spread-result" class="result-box">SPREAD RESULTS</div> 
+            <div id="ou-result" class="result-box">OU RESULTS</div>
+        </div>
+    </div>
+
+    <script src="scripts/predict.js"></script>
+    <script src="scripts/account.js"></script>
+</body>
+</html>

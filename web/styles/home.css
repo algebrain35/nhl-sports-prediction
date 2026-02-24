@@ -1,0 +1,34 @@
+/* Homepage Description Section */
+.home-description {
+    position: absolute;
+    top: 50%;
+    left: 10%; /* shifted left to create space for the logo */
+    transform: translateY(-50%);
+    text-align: left; 
+    max-width: 400px; 
+}
+
+.home-description h1 {
+    font-size: 2.5rem; 
+    font-weight: bold;
+    color: white;
+    max-width: 500px; 
+    line-height: 1.3;
+}
+
+/* Highlighted Text in Description */
+.home-description .highlight {
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700); 
+    -webkit-background-clip: text; /* stops the text from clipping (becomes a blur) */
+    color: transparent; /* makes the text color transparent to show the gradient */
+}
+
+/* money picture (middle right side of the screen) */
+.logo {
+    position: absolute;
+    top: 50%;
+    right: 10%;
+    transform: translateY(-50%);
+    width: 450px; 
+    height: auto;
+}

@@ -1,0 +1,10 @@
+	backend/db/user.py
+	backend/model/models/ML/XGBoot_59.0%_ML.json
+	backend/model/models/ML/XGBoot_60.2%_ML.json
+	backend/model/models/ML/XGBoot_60.6%_ML.json
+	backend/model/models/ML/XGBoot_61.2%_ML.json
+	backend/model/models/spread/1.5/XGBoot_73.6%_Spread_1.5.json
+	backend/model/models/spread/1.5/XGBoot_74.6%_Spread_1.5.json
+	backend/model/models/spread/1.5/XGBoot_75.0%_Spread_1.5.json
+	backend/model/models/spread/1.5/XGBoot_75.3%_Spread_1.5.json
+	nhld.db

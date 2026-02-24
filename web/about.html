@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About - Project Radon</title>
+  <link rel="stylesheet" href="styles/common.css">
+  <link rel="stylesheet" href="styles/about.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-left">
+      <div class="account-icon" id="accountIcon"></div>
+      <span>Project Radon</span>
+    </div>
+
+    <div class="nav-right">
+      <a href="index.html">Home</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="predictions.html">Predictions</a>
+      <a href="about.html">About</a>
+      <a href="history.html">History</a>
+    </div>
+  </nav>
+
+    <!-- Account Dropdown -->
+    <div class="dropdown-menu" id="accountDropdown">
+      <div id="userDisplay">Account</div>
+
+      <!-- Subscription status (hidden until logged in) -->
+      <div id="subscriptionStatus" style="display: none;"></div>
+
+      <!-- Login Form -->
+      <div id="authForms">
+          <input type="email" id="loginEmail" placeholder="Email">
+          <input type="password" id="loginPassword" placeholder="Password">
+          <button id="loginButton">Login</button>
+          <button id="showRegister">Register</button>
+      </div>
+
+      <!-- Registration Form -->
+      <div id="registerForm" style="display: none;">
+          <input type="text" id="registerFirstName" placeholder="First Name">
+          <input type="text" id="registerLastName" placeholder="Last Name">
+          <input type="email" id="registerEmail" placeholder="Email">
+          <input type="password" id="registerPassword" placeholder="Password">
+          <button id="registerButton">Register</button>
+          <button id="showLogin">Back to Login</button>
+      </div>
+
+      <!-- Logout Button (hidden until logged in) -->
+      <button id="logoutButton" style="display: none;">Logout</button>
+  </div>
+
+  <div class="about-container">
+    <div class="about-left">
+      <h2>About Project Radon</h2>
+      <p>
+        Project Radon is designed to help you place safer and more secure NHL sports bets. 
+        The idea emerged from the need to replace emotional betting strategies with data-driven predictions, leveraging artificial intelligence to achieve mathematical precision. 
+        Initially made as a passion project, the concept evolved into a project for sale in 2025. Project Radon has your back to help leverage sports betting choices.
+      </p>
+    </div>
+    <div class="about-right">
+      <h3>Contact Information</h3>
+      <ul>
+        <li>Email: 19077385@saultcollege.ca</li>
+        <li>Phone: 705-677-8976</li>
+        <li>Address: 443 Northern Ave</li>
+        <li>Website: you're looking at it</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="nhl-banner">
+    <img src="images/nhlabout.jpg" alt="NHL Hockey Lineup">
+  </div>
+
+  <script src="scripts/account.js"></script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Trebuchet MS", Helvetica, sans-serif;
+}
+
+body {
+    background-color: #121826;
+    color: white;
+}
+
+/* navigation bar */
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1A1F2E;
+    padding: 15px 20px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.nav-left {
+    display: flex;
+    align-items: center;
+    font-size: 1.8rem;
+    font-weight: bold;
+}
+
+/* profile icon inside navigation */
+.nav-left .account-icon {
+    width: 35px;
+    height: 35px;
+    background-image: url('../images/profileicon.png');
+    background-size: cover;
+    background-position: center;
+    border-radius: 50%;
+    cursor: pointer;
+    margin-right: 15px;
+}
+
+/* gradient text for project name */
+.nav-left span {
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700);
+    -webkit-background-clip: text; /* fix clipping and blur issue */
+    color: transparent;
+}
+
+.nav-right {
+    display: flex;
+    gap: 25px;
+}
+
+.nav-right a {
+    color: white;
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-weight: 600;
+    transition: color 0.3s ease-in-out, transform 0.2s;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+/* hover effect for navigation links */
+.nav-right a:hover {
+    color: #2ECC71;
+    transform: translateY(-2px);
+}
+
+/* account dropdown menu */
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 60px;
+    left: 10px;
+    background-color: #1A1F2E;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    width: 220px;
+    text-align: center;
+    z-index: 1000;
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+/* username/email display in dropdown */
+.dropdown-menu #userDisplay {
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+}
+
+.dropdown-menu input {
+    width: 90%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #FFD700;
+    background-color: #121826;
+    color: white;
+    border-radius: 5px;
+}
+
+/* dropdown buttons */
+.dropdown-menu button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    border: none;
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700);
+    color: #121826;
+    font-weight: bold;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* hover effect for dropdown buttons */
+.dropdown-menu button:hover {
+    background: linear-gradient(45deg, #FFD700, #F5B800, #E6B400);
+}
+
+/* logout button styling */
+#logoutButton {
+    display: none;
+    margin-top: 10px;
+    background: red;
+    color: white;
+    font-weight: bold;
+}
+
+#logoutButton:hover {
+    background: darkred;
+}
+
+#subscriptionStatus {
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700);
+    -webkit-background-clip: text; /* fix clipping and blur issue */
+    color: transparent;
+    font-weight: 900; 
+    font-size: 1.1rem; 
+    margin-top: 10px;
+}

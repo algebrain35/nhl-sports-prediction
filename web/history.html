@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History - Project Radon</title>
+    <link rel="stylesheet" href="styles/common.css">
+    <link rel="stylesheet" href="styles/history.css">
+</head>
+<body>
+
+    <!-- nav bar -->
+    <nav>
+        <div class="nav-left">
+            <div class="account-icon" id="accountIcon"></div>
+            <span>Project Radon</span>
+        </div>
+
+        <div class="nav-right">
+            <a href="index.html">Home</a>
+            <a href="pricing.html">Pricing</a>
+            <a href="predictions.html">Predictions</a>
+            <a href="about.html">About</a>
+            <a href="history.html">History</a>
+        </div>
+    </nav>
+
+    <!-- account dropdown -->
+    <div class="dropdown-menu" id="accountDropdown">
+        <div id="userDisplay">Account</div>
+        <div id="subscriptionStatus" style="display: none;"></div>
+
+        <!-- login form -->
+        <div id="authForms">
+            <input type="email" id="loginEmail" placeholder="Email">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button id="loginButton">Login</button>
+            <button id="showRegister">Register</button>
+        </div>
+
+        <!-- registration form -->
+        <div id="registerForm" style="display: none;">
+            <input type="text" id="registerFirstName" placeholder="First Name">
+            <input type="text" id="registerLastName" placeholder="Last Name">
+            <input type="email" id="registerEmail" placeholder="Email">
+            <input type="password" id="registerPassword" placeholder="Password">
+            <button id="registerButton">Register</button>
+            <button id="showLogin">Back to Login</button>
+        </div>
+
+        <button id="logoutButton" style="display: none;">Logout</button>
+    </div>
+
+    <div class="history-wrapper">
+        <h1>Team History</h1>
+
+        <!-- team selection -->
+        <div class="team-selection">
+            <select id="team-select">
+                <option value="">Select Team</option>
+            </select>
+            <button id="get-history">Get Team History</button>
+        </div>
+
+        <!-- results display -->
+        <div class="history-results">
+            <div id="history-result" class="result-box">
+                <table id="history-table">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/history.js"></script>
+    <script src="scripts/account.js"></script>
+</body>
+</html>

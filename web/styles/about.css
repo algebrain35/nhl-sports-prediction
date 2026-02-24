@@ -1,0 +1,70 @@
+/* About Page */
+.about-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 50px;              
+    padding: 50px;
+    color: white;
+}
+
+.about-left {
+    flex: 2;
+}
+
+/* style for the subheading with a gold gradient */
+.about-left h2 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700);
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+/*  styling for readability for the paragraph */
+.about-left p {
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+/* contact info to the right */
+.about-right {
+    flex: 1;
+}
+
+/* gold gradient for the heading */
+.about-right h3 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+    background: linear-gradient(45deg, #E6B400, #F5B800, #FFD700);
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+/* removed default list styling and add spacing */
+.about-right ul {
+    list-style: none;
+    padding: 0;
+}
+
+.about-right li {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+}
+
+/* NHL banner section */
+   .nhl-banner {
+    width: 100%;
+    text-align: center;
+    margin-top: 40px;
+    padding: 20px 0;
+    background-color: #121826; 
+}
+
+.nhl-banner img {
+    width: 100%;
+    max-width: 1200px; 
+    height: auto;      
+    display: block;
+    margin: 0 auto;
+}

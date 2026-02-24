@@ -1,0 +1,14 @@
+FROM python:3.9-slim
+WORKDIR /app
+
+COPY requirements.txt .
+COPY backend/ ./backend/
+COPY web/ ./web/
+COPY all_games_preproc.csv .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+EXPOSE 5000
+
+CMD ["python3", "./backend/api/app.py"]
+
