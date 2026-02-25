@@ -9,7 +9,8 @@ import sys
 sys.path.insert(1, "./backend/preprocess")
 import elo
 
-from scipy.stats import poisson, norm
+from scipy.stats import poisson
+from scipy.special import ive as log_scaled_bessel  # exponentially-scaled Bessel
 
 # ── Constants (must match preprocessor) ───────────────────────────────────────
 
@@ -44,18 +45,12 @@ MOMENTUM_METRICS = [
     "xGoalsPercentage", "winRateFor",
 ]
 
-# Model filenames (stable, not accuracy-stamped)
+# Model filenames
 GF_POISSON_FILE = "poisson_goalsFor.json"
 GA_POISSON_FILE = "poisson_goalsAgainst.json"
-SPREAD_REG_FILE = "spread_reg_goalDiff.json"
-SPREAD_META_FILE = "spread_reg_meta.json"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def get_objective(booster: xgb.Booster) -> str:
-    return json.loads(booster.save_config())["learner"]["objective"]["name"]
-
 
 def _load_booster(path: str) -> xgb.Booster:
     model = xgb.Booster()
@@ -79,9 +74,10 @@ def _best_scored_file(directory: str) -> str:
 def best_model_path(event: str, model_dir: str) -> str | tuple[str, str]:
     """
     Resolve model path(s) for a given event type.
-      ml     → str  (path to best accuracy-stamped .json)
-      ou     → tuple[str, str]  (goalsFor path, goalsAgainst path)
-      spread → str  (path to spread_reg_goalDiff.json)
+
+      ml     → str           (path to best accuracy-stamped .json classifier)
+      ou     → (str, str)    (goalsFor path, goalsAgainst path)
+      spread → (str, str)    (same Poisson models — spread is Skellam-derived)
     """
     try:
         if event == "ml":
@@ -90,7 +86,8 @@ def best_model_path(event: str, model_dir: str) -> str | tuple[str, str]:
                 raise FileNotFoundError(f"Directory not found: {ml_dir}")
             return _best_scored_file(ml_dir)
 
-        elif event == "ou":
+        elif event in ("ou", "spread"):
+            # Both O/U and spread are powered by the same Poisson pair
             p_dir = os.path.join(model_dir, "poisson")
             if not os.path.exists(p_dir):
                 raise FileNotFoundError(f"Directory not found: {p_dir}")
@@ -98,12 +95,6 @@ def best_model_path(event: str, model_dir: str) -> str | tuple[str, str]:
                 os.path.join(p_dir, GF_POISSON_FILE),
                 os.path.join(p_dir, GA_POISSON_FILE),
             )
-
-        elif event == "spread":
-            s_dir = os.path.join(model_dir, "spread_reg")
-            if not os.path.exists(s_dir):
-                raise FileNotFoundError(f"Directory not found: {s_dir}")
-            return os.path.join(s_dir, SPREAD_REG_FILE)
 
         else:
             raise ValueError(f"Unknown event: {event}")
@@ -113,12 +104,78 @@ def best_model_path(event: str, model_dir: str) -> str | tuple[str, str]:
         return ""
 
 
-# ── Probability helpers ───────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Skellam Distribution
+#
+# The difference of two independent Poisson RVs X ~ Pois(μ₁), Y ~ Pois(μ₂)
+# follows a Skellam distribution. The PMF uses the modified Bessel function
+# of the first kind:
+#
+#   P(X - Y = k) = e^{-(μ₁+μ₂)} · (μ₁/μ₂)^{k/2} · I_{|k|}(2√(μ₁μ₂))
+#
+# This gives us EXACT discrete probabilities for goal differential —
+# no normal approximation needed.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def skellam_pmf(k, mu1, mu2):
+    """
+    P(X - Y = k) where X ~ Poisson(mu1), Y ~ Poisson(mu2).
+
+    Uses the numerically stable form via exponentially-scaled Bessel:
+      ive(v, z) = I_v(z) · e^{-|Re(z)|}
+    so  I_v(z) = ive(v, z) · e^{z}
+
+    log P(k) = -(mu1 + mu2)  +  (k/2) · ln(mu1/mu2)  +  ln(ive(|k|, z))  +  z
+    where z = 2·sqrt(mu1·mu2)
+    """
+    mu1 = np.asarray(mu1, dtype=np.float64)
+    mu2 = np.asarray(mu2, dtype=np.float64)
+    k = np.asarray(k, dtype=np.float64)
+
+    z = 2.0 * np.sqrt(mu1 * mu2)
+    abs_k = np.abs(k)
+
+    # ive(v, z) = I_v(z) · e^{-z}  →  log I_v(z) = log(ive(v, z)) + z
+    ive_val = log_scaled_bessel(abs_k, z)
+
+    # Guard against ive returning 0 for large |k|
+    ive_val = np.maximum(ive_val, 1e-300)
+
+    log_pmf = (
+        -(mu1 + mu2)
+        + (k / 2.0) * np.log(np.maximum(mu1 / mu2, 1e-15))
+        + np.log(ive_val)
+        + z  # un-scale the exponentially-scaled Bessel
+    )
+    return np.exp(np.minimum(log_pmf, 0.0))  # clamp to avoid > 1 from float noise
+
+
+def skellam_cdf(k, mu1, mu2, max_goals=12):
+    """
+    P(X - Y ≤ k) — CDF of Skellam distribution.
+    Computed by summing PMF from -max_goals to floor(k).
+
+    For NHL: goal differentials beyond ±12 have negligible probability.
+    """
+    mu1 = np.asarray(mu1, dtype=np.float64)
+    mu2 = np.asarray(mu2, dtype=np.float64)
+    k_floor = int(np.floor(k))
+
+    # Vectorized sum over all diff values at once
+    diffs = np.arange(-max_goals, k_floor + 1)
+    total = np.zeros_like(mu1, dtype=np.float64)
+    for d in diffs:
+        total += skellam_pmf(d, mu1, mu2)
+
+    return np.clip(total, 0.0, 1.0)
+
+
+# ── O/U probabilities (Poisson on total goals — unchanged) ───────────────────
 
 def ou_probability(lambda_total, line):
     """
-    P(over), P(under), P(push) for a given O/U line from Poisson λ.
-    Works with both scalar and array inputs.
+    P(over), P(under), P(push) for a given O/U line.
+    Uses Poisson CDF on total expected goals (λ_gf + λ_ga).
     """
     if line % 1 == 0.5:
         k = int(line - 0.5)
@@ -131,22 +188,71 @@ def ou_probability(lambda_total, line):
         return {"over": 1 - p_under - p_push, "under": p_under, "push": p_push}
 
 
-def spread_probability(pred_diff, sigma, line):
+# ── Spread probabilities (Skellam on goal differential) ──────────────────────
+
+def spread_probability(lambda_gf, lambda_ga, line):
     """
-    P(home covers spread) using normal CDF on predicted goal differential.
-    line: home spread (e.g., -1.5 means home favored by 1.5)
+    P(home covers spread) using the Skellam distribution.
+
+    This is the key improvement: instead of fitting a separate regression
+    model and using a normal CDF approximation, we derive spread probabilities
+    directly from the same Poisson λ values used for O/U.
+
+    The Skellam distribution gives EXACT discrete probabilities for
+    (goals_for - goals_against), which is inherently an integer.
+
+    Args:
+        lambda_gf: predicted expected goals for home team
+        lambda_ga: predicted expected goals against home team
+        line:      home spread (e.g., -1.5 means home favored by 1.5)
+
+    Cover condition: goalDiff > -line  (home needs diff to exceed threshold)
     """
-    threshold = -line
-    if threshold % 1 == 0.5 or line % 1 == 0.5:
-        p_cover = 1 - norm.cdf(threshold, loc=pred_diff, scale=sigma)
-        return {"cover": p_cover, "not_cover": 1 - p_cover, "push": 0.0}
+    threshold = -line  # e.g., spread=-1.5 → home needs diff > 1.5
+
+    if line % 1 == 0.5 or threshold % 1 == 0.5:
+        # Half-line: no push possible
+        # P(cover) = P(diff > threshold) = 1 - P(diff ≤ floor(threshold))
+        p_not_cover = skellam_cdf(threshold, lambda_gf, lambda_ga)
+        p_cover = 1.0 - p_not_cover
+        return {"cover": p_cover, "not_cover": p_not_cover, "push": 0.0}
     else:
-        p_push = (
-            norm.cdf(threshold + 0.5, loc=pred_diff, scale=sigma) -
-            norm.cdf(threshold - 0.5, loc=pred_diff, scale=sigma)
-        )
-        p_not_cover = norm.cdf(threshold - 0.5, loc=pred_diff, scale=sigma)
-        return {"cover": 1 - p_not_cover - p_push, "not_cover": p_not_cover, "push": p_push}
+        # Whole-line: push when diff == threshold exactly
+        k = int(threshold)
+        p_push = skellam_pmf(k, lambda_gf, lambda_ga)
+        p_at_or_below = skellam_cdf(k, lambda_gf, lambda_ga)
+        p_not_cover = p_at_or_below - p_push  # P(diff < threshold)
+        p_cover = 1.0 - p_at_or_below          # P(diff > threshold)
+        return {
+            "cover":     np.clip(p_cover, 0.0, 1.0),
+            "not_cover": np.clip(p_not_cover, 0.0, 1.0),
+            "push":      np.clip(p_push, 0.0, 1.0),
+        }
+
+
+# ── ML probabilities (Skellam on goal differential) ──────────────────────────
+
+def ml_probability_from_poisson(lambda_gf, lambda_ga):
+    """
+    Derive moneyline probabilities from Poisson λ values via Skellam.
+
+      P(home win in regulation) = P(diff > 0) = 1 - P(diff ≤ 0)
+      P(away win in regulation) = P(diff < 0) = P(diff ≤ -1)
+      P(regulation draw → OT)   = P(diff == 0)
+
+    NHL games that are tied after regulation go to OT/SO.
+    Historical OT home win rate is ~52%, so we split draws accordingly.
+    """
+    OT_HOME_EDGE = 0.52
+
+    p_draw    = skellam_pmf(0, lambda_gf, lambda_ga)
+    p_home_reg = 1.0 - skellam_cdf(0, lambda_gf, lambda_ga)   # P(diff > 0)
+    p_away_reg = skellam_cdf(-1, lambda_gf, lambda_ga)         # P(diff ≤ -1) = P(diff < 0)
+
+    p_home = p_home_reg + p_draw * OT_HOME_EDGE
+    p_away = p_away_reg + p_draw * (1.0 - OT_HOME_EDGE)
+
+    return {"home": p_home, "away": p_away, "ot_probability": p_draw}
 
 
 # ── Feature engineering (inference) ───────────────────────────────────────────
@@ -209,66 +315,84 @@ def engineer_match_features(row: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ── NHLModel ──────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# NHLModel — Unified inference
+# ══════════════════════════════════════════════════════════════════════════════
 
 class NHLModel:
     """
-    Unified inference model for three event types:
+    Unified inference model for three betting markets.
 
-      ml:     XGBoost classifier          → P(home win)
-      ou:     Dual Poisson (GF + GA)      → P(over/under) at any line
-      spread: Regression on goalDiffFor   → P(cover) at any spread line
+    Architecture
+    ────────────
+    The dual Poisson models (goalsFor + goalsAgainst) are the SINGLE SOURCE
+    OF TRUTH. They predict λ_gf and λ_ga, from which we derive:
 
-    Init patterns (matches app.py usage):
-      NHLModel("ml",     model_path=best_model_path("ml", MODEL_DIR))
-      NHLModel("ou",     model_paths=best_model_path("ou", MODEL_DIR))
-      NHLModel("spread", model_path=best_model_path("spread", MODEL_DIR))
+      ML:     P(home win) via Skellam   →  P(diff > 0)
+      O/U:    P(over/under) via Poisson →  CDF on λ_total = λ_gf + λ_ga
+      Spread: P(cover) via Skellam      →  P(diff > threshold)
+
+    The standalone ML classifier is kept as an optional alternative when
+    initialized with model_path instead of model_paths.
+
+    Why Skellam > normal approximation for spreads
+    ───────────────────────────────────────────────
+    NHL goal differentials are discrete integers. The Skellam distribution
+    gives the EXACT probability mass for each integer value, while the normal
+    approximation smears probability across a continuous range. This matters
+    most at whole-number spread lines (±1, ±2) where the discrete push
+    probability is significant (~18-22% for puck line at ±1).
+
+    Init patterns
+    ─────────────
+      NHLModel("ml",     model_path=best_model_path("ml", DIR))      # classifier
+      NHLModel("ml",     model_paths=best_model_path("ou", DIR))     # Poisson-derived ML
+      NHLModel("ou",     model_paths=best_model_path("ou", DIR))
+      NHLModel("spread", model_paths=best_model_path("spread", DIR)) # = same Poisson pair
     """
 
     def __init__(self, event: str, model_path=None, model_paths=None):
         self.event = event.lower()
 
-        # ML classifier
+        # Standalone ML classifier (optional)
         self.model = None
 
-        # Poisson dual models
+        # Poisson dual models — shared across all Poisson-based predictions
         self.poisson_gf = None
         self.poisson_ga = None
 
-        # Spread regression + residual sigma
-        self.spread_model = None
-        self.spread_sigma = None
-
         if self.event == "ml":
-            if model_path is None:
-                raise ValueError("ml requires model_path")
-            self.model = _load_booster(model_path)
-            print(f"[ml] Loaded: {model_path}")
-
-        elif self.event == "ou":
-            if model_paths is None:
-                raise ValueError("ou requires model_paths=(gf_path, ga_path)")
-            gf_path, ga_path = model_paths
-            self.poisson_gf = _load_booster(gf_path)
-            self.poisson_ga = _load_booster(ga_path)
-            print(f"[ou] Loaded Poisson: {gf_path}, {ga_path}")
-
-        elif self.event == "spread":
-            if model_path is None:
-                raise ValueError("spread requires model_path")
-            self.spread_model = _load_booster(model_path)
-            # Load sigma from meta file next to the model
-            meta_path = os.path.join(os.path.dirname(model_path), SPREAD_META_FILE)
-            if os.path.exists(meta_path):
-                meta = json.load(open(meta_path))
-                self.spread_sigma = meta["sigma"]
+            if model_paths is not None:
+                # Poisson-based moneyline
+                self._load_poisson_pair(model_paths)
+            elif model_path is not None:
+                # Standalone classifier
+                self.model = _load_booster(model_path)
+                print(f"[ml] Loaded classifier: {model_path}")
             else:
-                self.spread_sigma = 2.5  # reasonable NHL default
-                print(f"[spread] Warning: {meta_path} not found, using sigma={self.spread_sigma}")
-            print(f"[spread] Loaded: {model_path} (sigma={self.spread_sigma:.3f})")
+                raise ValueError("ml requires model_path or model_paths")
+
+        elif self.event in ("ou", "spread"):
+            if model_paths is None:
+                raise ValueError(f"{self.event} requires model_paths=(gf_path, ga_path)")
+            self._load_poisson_pair(model_paths)
 
         else:
             raise ValueError(f"Unknown event: {self.event}")
+
+    def _load_poisson_pair(self, model_paths: tuple[str, str]):
+        """Load the shared Poisson GF/GA model pair."""
+        gf_path, ga_path = model_paths
+        self.poisson_gf = _load_booster(gf_path)
+        self.poisson_ga = _load_booster(ga_path)
+        print(f"[{self.event}] Loaded Poisson pair: {gf_path}, {ga_path}")
+
+    # ── Properties ────────────────────────────────────────────────────
+
+    @property
+    def uses_poisson(self) -> bool:
+        """True if this model instance uses Poisson dual models."""
+        return self.poisson_gf is not None
 
     # ── DMatrix creation ──────────────────────────────────────────────
 
@@ -284,6 +408,19 @@ class NHLModel:
         mat = match_df[features].apply(pd.to_numeric, errors="coerce").astype(float)
         return xgb.DMatrix(mat)
 
+    # ── Core: Poisson λ prediction (single forward pass) ──────────────
+
+    def _predict_lambdas(self, match_df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Predict λ_gf and λ_ga from the Poisson dual models.
+        This single forward pass is the foundation for ALL three markets.
+        """
+        dmat_gf = self._to_dmatrix(self.poisson_gf, match_df)
+        dmat_ga = self._to_dmatrix(self.poisson_ga, match_df)
+        lambda_gf = self.poisson_gf.predict(dmat_gf)
+        lambda_ga = self.poisson_ga.predict(dmat_ga)
+        return lambda_gf, lambda_ga
+
     # ── Prediction dispatch ───────────────────────────────────────────
 
     def predict(self, match_df: pd.DataFrame, threshold=None) -> np.ndarray:
@@ -294,25 +431,93 @@ class NHLModel:
           spread: → [[P(not_cover), P(cover)]]   (threshold = spread line)
         """
         if self.event == "ml":
-            dmat = self._to_dmatrix(self.model, match_df)
-            pred = self.model.predict(dmat)
-            return np.stack([1 - pred, pred], axis=1)
+            return self._predict_ml(match_df)
 
         if threshold is None:
             raise ValueError(f"{self.event} prediction requires a threshold")
 
         if self.event == "ou":
-            dmat_gf = self._to_dmatrix(self.poisson_gf, match_df)
-            dmat_ga = self._to_dmatrix(self.poisson_ga, match_df)
-            lambda_total = self.poisson_gf.predict(dmat_gf) + self.poisson_ga.predict(dmat_ga)
-            probs = ou_probability(lambda_total, float(threshold))
-            return np.stack([probs["under"], probs["over"]], axis=1)
+            return self._predict_ou(match_df, float(threshold))
 
         if self.event == "spread":
-            dmat = self._to_dmatrix(self.spread_model, match_df)
-            pred_diff = self.spread_model.predict(dmat)
-            probs = spread_probability(pred_diff, self.spread_sigma, float(threshold))
-            return np.stack([probs["not_cover"], probs["cover"]], axis=1)
+            return self._predict_spread(match_df, float(threshold))
+
+    def _predict_ml(self, match_df: pd.DataFrame) -> np.ndarray:
+        if self.uses_poisson:
+            lambda_gf, lambda_ga = self._predict_lambdas(match_df)
+            probs = ml_probability_from_poisson(lambda_gf, lambda_ga)
+            return np.stack([probs["away"], probs["home"]], axis=1)
+        else:
+            dmat = self._to_dmatrix(self.model, match_df)
+            pred = self.model.predict(dmat)
+            return np.stack([1 - pred, pred], axis=1)
+
+    def _predict_ou(self, match_df: pd.DataFrame, line: float) -> np.ndarray:
+        lambda_gf, lambda_ga = self._predict_lambdas(match_df)
+        lambda_total = lambda_gf + lambda_ga
+        probs = ou_probability(lambda_total, line)
+        return np.stack([probs["under"], probs["over"]], axis=1)
+
+    def _predict_spread(self, match_df: pd.DataFrame, line: float) -> np.ndarray:
+        """
+        Spread via Skellam distribution on (λ_gf, λ_ga).
+
+        Previously this used a separate spread_reg model + normal CDF.
+        Now it derives spread probabilities directly from the same Poisson
+        λ values, giving exact discrete probabilities.
+        """
+        lambda_gf, lambda_ga = self._predict_lambdas(match_df)
+        probs = spread_probability(lambda_gf, lambda_ga, line)
+        return np.stack([probs["not_cover"], probs["cover"]], axis=1)
+
+    # ── Batch prediction (all markets, one forward pass) ──────────────
+
+    def predict_all(self, match_df: pd.DataFrame, ou_line=5.5, spread_line=-1.5) -> dict:
+        """
+        Predict all three markets from a SINGLE Poisson forward pass.
+        Only works when the model is Poisson-based.
+
+        Returns a dict with λ values and probabilities for all markets.
+        This is what the /api/nhl/predict endpoint should use.
+        """
+        if not self.uses_poisson:
+            raise ValueError("predict_all requires Poisson-based model (pass model_paths)")
+
+        # One forward pass → two λ values → three markets
+        lambda_gf, lambda_ga = self._predict_lambdas(match_df)
+        lambda_total = lambda_gf + lambda_ga
+
+        ml_probs = ml_probability_from_poisson(lambda_gf, lambda_ga)
+        ou_probs = ou_probability(lambda_total, ou_line)
+        sp_probs = spread_probability(lambda_gf, lambda_ga, spread_line)
+
+        def _scalar(x):
+            """Extract scalar from numpy array or return float directly."""
+            return float(x[0]) if hasattr(x, '__len__') else float(x)
+
+        return {
+            "lambda_gf":    float(lambda_gf[0]),
+            "lambda_ga":    float(lambda_ga[0]),
+            "expected_diff": float(lambda_gf[0] - lambda_ga[0]),
+            "lambda_total": float(lambda_total[0]),
+            "ml": {
+                "home":           float(ml_probs["home"][0]),
+                "away":           float(ml_probs["away"][0]),
+                "ot_probability": float(ml_probs["ot_probability"][0]),
+            },
+            "ou": {
+                "line":  ou_line,
+                "over":  _scalar(ou_probs["over"]),
+                "under": _scalar(ou_probs["under"]),
+                "push":  _scalar(ou_probs["push"]),
+            },
+            "spread": {
+                "line":      spread_line,
+                "cover":     _scalar(sp_probs["cover"]),
+                "not_cover": _scalar(sp_probs["not_cover"]),
+                "push":      _scalar(sp_probs["push"]),
+            },
+        }
 
     # ── Match construction ────────────────────────────────────────────
 
@@ -388,11 +593,8 @@ class NHLModel:
 
     def get_team_prediction(self, home: str, away: str, threshold=None):
         """
-        End-to-end: load CSV → build match → engineer features → predict.
-
-          ml:     → [[P(away), P(home)]]
-          ou:     → [[P(under), P(over)]]       threshold = O/U line (e.g. 5.5)
-          spread: → [[P(not_cover), P(cover)]]   threshold = spread line (e.g. -1.5)
+        End-to-end: load CSV → build match → predict.
+        Convenience method for standalone usage.
         """
         try:
             df = pd.read_csv("all_games_preproc.csv")
@@ -419,14 +621,57 @@ def american_to_decimal(odds: int):
     return (100 + -odds) / -odds if odds < 0 else (100 + odds) / 100
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     MODEL_DIR = "./backend/model/models"
+    poisson_paths = best_model_path("ou", MODEL_DIR)
 
-    ml = NHLModel("ml", model_path=best_model_path("ml", MODEL_DIR))
-    print("ML:", ml.get_team_prediction("PIT", "FLA"))
+    print("=" * 70)
+    print("POISSON-UNIFIED PREDICTIONS  (single model pair → all 3 markets)")
+    print("=" * 70)
 
-    ou = NHLModel("ou", model_paths=best_model_path("ou", MODEL_DIR))
-    print("OU 5.5:", ou.get_team_prediction("PIT", "FLA", threshold=5.5))
+    # Load once, predict everything
+    model = NHLModel("ou", model_paths=poisson_paths)
+    df = pd.read_csv("all_games_preproc.csv")
+    match_df = model.create_match(df, "PIT", "FLA")
 
-    sp = NHLModel("spread", model_path=best_model_path("spread", MODEL_DIR))
-    print("Spread -1.5:", sp.get_team_prediction("PIT", "FLA", threshold=-1.5))
+    results = model.predict_all(match_df, ou_line=5.5, spread_line=-1.5)
+
+    print(f"\nPIT (home) vs FLA (away)")
+    print(f"  λ_gf = {results['lambda_gf']:.3f}   (expected home goals)")
+    print(f"  λ_ga = {results['lambda_ga']:.3f}   (expected away goals)")
+    print(f"  E[diff] = {results['expected_diff']:+.3f}")
+    print(f"  λ_total = {results['lambda_total']:.3f}")
+    print()
+    print(f"  ML:       P(home) = {results['ml']['home']:.1%}   "
+          f"P(away) = {results['ml']['away']:.1%}   "
+          f"P(OT) = {results['ml']['ot_probability']:.1%}")
+    print(f"  O/U 5.5:  P(over) = {results['ou']['over']:.1%}   "
+          f"P(under) = {results['ou']['under']:.1%}")
+    print(f"  Spread -1.5: P(cover) = {results['spread']['cover']:.1%}   "
+          f"P(not_cover) = {results['spread']['not_cover']:.1%}")
+
+    # Also test individual event interfaces
+    print("\n" + "-" * 70)
+    print("Individual event models (same Poisson pair under the hood):")
+    print("-" * 70)
+
+    ml = NHLModel("ml", model_paths=poisson_paths)
+    print(f"\nML:         {ml.get_team_prediction('PIT', 'FLA')}")
+
+    ou = NHLModel("ou", model_paths=poisson_paths)
+    print(f"OU 5.5:     {ou.get_team_prediction('PIT', 'FLA', threshold=5.5)}")
+
+    sp = NHLModel("spread", model_paths=poisson_paths)
+    print(f"Spread -1.5: {sp.get_team_prediction('PIT', 'FLA', threshold=-1.5)}")
+
+    # Compare with standalone ML classifier if available
+    print("\n" + "-" * 70)
+    print("Standalone ML classifier (for comparison):")
+    print("-" * 70)
+    try:
+        ml_cls = NHLModel("ml", model_path=best_model_path("ml", MODEL_DIR))
+        print(f"ML classifier: {ml_cls.get_team_prediction('PIT', 'FLA')}")
+    except Exception as e:
+        print(f"Not available: {e}")

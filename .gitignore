@@ -8,6 +8,5 @@ cap/*
 nhl.db
 data/NHL/teams/*
 cap/*
-all_games_preproc.csv
 
 .vercel

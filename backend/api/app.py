@@ -19,7 +19,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# ── App setup ─────────────────────────────────────────────────────────────────
+
 
 app = Flask(__name__)
 
@@ -32,12 +32,12 @@ CORS(app, supports_credentials=True, origins=ALLOWED_ORIGINS,
 
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
 
-# ── Models (loaded once at startup) ───────────────────────────────────────────
+
 
 MODEL_DIR = os.getenv("MODEL_DIR", "./backend/model/models")
 DATA_PATH = os.getenv("DATA_PATH", "all_games_preproc.csv")
 
-# Lazy-load models to reduce cold start memory spike
+
 _models = {}
 
 def _get_model(event: str) -> NHLModel:
@@ -48,12 +48,13 @@ def _get_model(event: str) -> NHLModel:
         elif event == "ou":
             _models[event] = NHLModel("ou", model_paths=best_model_path("ou", MODEL_DIR))
         elif event == "spread":
-            _models[event] = NHLModel("spread", model_path=best_model_path("spread", MODEL_DIR))
-        gc.collect()  # free any transient allocs from model loading
+            
+            _models[event] = NHLModel("spread", model_paths=best_model_path("spread", MODEL_DIR))
+        gc.collect()
     return _models[event]
 
 
-# ── Shared CSV loader (cached) ────────────────────────────────────────────────
+
 
 _df_cache = {"df": None, "mtime": 0}
 
@@ -69,8 +70,6 @@ def _get_data() -> pd.DataFrame:
         raise FileNotFoundError(f"Data file not found: {DATA_PATH}")
     return _df_cache["df"]
 
-
-# ── Prediction endpoints (no auth required) ──────────────────────────────────
 
 @app.route("/api/nhl/ml/predict", methods=["GET"])
 def predict_ml():
@@ -128,12 +127,11 @@ def predict_spread():
         return jsonify({"error": str(e)}), 500
 
 
-# ── Batch prediction (all 3 events in one call) ──────────────────────────────
-
 @app.route("/api/nhl/predict", methods=["GET"])
 def predict_all():
     """
     Single endpoint returning ML + OU + spread for one matchup.
+    All derived from one Poisson forward pass (λ_gf, λ_ga).
     ?home=PIT&away=FLA&ou=5.5&spread=-1.5
     """
     try:
@@ -146,27 +144,20 @@ def predict_all():
 
         df = _get_data()
 
-        # Build match once, reuse for all models
-        ml_model = _get_model("ml")
-        match_df = ml_model.create_match(df, home, away)
-
-        ml_preds = ml_model.predict(match_df)
-        ou_preds = _get_model("ou").predict(match_df, threshold=float(ou))
-        sp_preds = _get_model("spread").predict(match_df, threshold=float(spread))
+        
+        model = _get_model("ou")
+        match_df = model.create_match(df, home, away)
+        results = model.predict_all(match_df, ou_line=float(ou), spread_line=float(spread))
 
         return jsonify({
             "home": home,
             "away": away,
-            "ml":     ml_preds.tolist()[0],
-            "ou":     {"line": float(ou), "probs": ou_preds.tolist()[0]},
-            "spread": {"line": float(spread), "probs": sp_preds.tolist()[0]},
+            **results,
         }), 200
     except Exception as e:
         logger.exception("Batch prediction failed")
         return jsonify({"error": str(e)}), 500
 
-
-# ── Health check ──────────────────────────────────────────────────────────────
 
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -177,7 +168,6 @@ def health():
     })
 
 
-# ── Init ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
