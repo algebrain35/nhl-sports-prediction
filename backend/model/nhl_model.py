@@ -567,7 +567,7 @@ class NHLModel:
     @staticmethod
     def _update_elo(match_row, home_df, away_df):
         try:
-            scorer = elo.Elo(50, 0.05)
+            scorer = elo.Elo(50, 0.2)
             h_team = home_df.iloc[0]["team"]
             a_team = away_df.iloc[0]["team"]
             scorer[h_team] = home_df.iloc[0].get("eloFor", 1500)

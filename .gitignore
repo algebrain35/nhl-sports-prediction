@@ -8,5 +8,6 @@ cap/*
 nhl.db
 data/NHL/teams/*
 cap/*
-
+node_modules
+.files
 .vercel

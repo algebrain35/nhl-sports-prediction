@@ -24,19 +24,18 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5000"
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5000, https://nhl-predictions-app.vercel.app"
 ).split(",")
+
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS]
 
 CORS(app, supports_credentials=True, origins=ALLOWED_ORIGINS,
      allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
 
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
 
-
-
 MODEL_DIR = os.getenv("MODEL_DIR", "./backend/model/models")
 DATA_PATH = os.getenv("DATA_PATH", "all_games_preproc.csv")
-
 
 _models = {}
 
